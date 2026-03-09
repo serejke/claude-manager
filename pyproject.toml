@@ -1,0 +1,23 @@
+[project]
+name = "claude-manager"
+version = "0.1.0"
+description = "Interactive TUI session picker for Claude Code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Sergei Patrikeev" }]
+keywords = ["claude", "cli", "tui", "session-manager"]
+classifiers = [
+    "Environment :: Console :: Curses",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+claude-manager = "claude_manager.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claude_manager"]
