@@ -36,3 +36,8 @@ Sessions live in `~/.claude/projects/<path-with-dashes>/<uuid>.jsonl`. Each line
 - Colors are defined via curses color pairs in `init_colors()`. Pair constants: `C_IDX`, `C_PATH`, `C_LABEL`, `C_TEXT`, `C_SELECTED`, `C_ASSISTANT`, `C_AGENT`, `C_HEADER`.
 - Use `safe_addstr()` for all curses writes — it handles screen boundary clipping.
 - Stats (user_msgs, assistant_msgs, agent_msgs, tool_uses, duration_min) are computed during initial parse, not during lazy load.
+
+## Local development
+
+- **Install locally**: `uv tool install --force --reinstall .` — must use `--reinstall` to bust wheel cache when version hasn't been bumped.
+- `--force` alone reuses cached wheels if the version string is unchanged.
