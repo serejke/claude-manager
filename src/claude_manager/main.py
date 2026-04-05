@@ -423,7 +423,7 @@ def draw_list_view(stdscr, sessions: list[SessionInfo], cursor: int, scroll: int
         safe_addstr(stdscr, 3, 2, "Press Esc to clear search", curses.A_DIM)
     else:
         for i in range(scroll, len(sessions)):
-            if y + 5 > h - 1:
+            if y >= h - 1:
                 break
             s = sessions[i]
             is_sel = i == cursor
@@ -599,12 +599,28 @@ def curses_main(stdscr, sessions: list[SessionInfo]) -> SessionInfo | None:
         ITEM_HEIGHT = 5  # base height without snippets
 
         if mode == "list":
-            # Adjust scroll to keep cursor visible
-            visible_items = max(1, (h - 3) // ITEM_HEIGHT)
+            # Compute actual height of each session item
+            def item_height(idx):
+                s = display_sessions[idx]
+                lines = 4  # marker+path, stats, first msg, separator
+                if s.first_user_msg != s.last_user_msg:
+                    lines += 1
+                if has_snippets and s.session_id in match_snippets:
+                    lines += len(match_snippets[s.session_id])
+                return lines
+
+            # Scroll up: ensure cursor item is visible
             if cursor < list_scroll:
                 list_scroll = cursor
-            elif cursor >= list_scroll + visible_items:
-                list_scroll = cursor - visible_items + 1
+
+            # Scroll down: ensure cursor item fits on screen
+            usable = h - 3  # header(1) + blank(1) + footer(1)
+            # Sum heights from list_scroll to cursor; if exceeds usable, bump scroll
+            while list_scroll < cursor:
+                total = sum(item_height(i) for i in range(list_scroll, cursor + 1))
+                if total <= usable:
+                    break
+                list_scroll += 1
 
             draw_list_view(stdscr, display_sessions, cursor, list_scroll,
                            search_mode=search_mode, search_query=search_query,
