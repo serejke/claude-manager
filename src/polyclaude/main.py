@@ -33,6 +33,7 @@ from pathlib import Path
 
 
 CLAUDE_DIR = Path.home() / ".claude" / "projects"
+SESSIONS_DIR = Path.home() / ".claude" / "sessions"
 HOME = str(Path.home())
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "polyclaude"
 CONFIG_PATH = CONFIG_DIR / "config.json"
@@ -95,6 +96,7 @@ class SessionInfo:
     last_user_msg: str
     timestamp_first: str
     timestamp_last: str
+    name: str = ""
     user_msgs: int = 0
     assistant_msgs: int = 0
     agent_msgs: int = 0
@@ -368,6 +370,26 @@ def load_messages(session: SessionInfo):
     session.messages_loaded = True
 
 
+def load_session_names() -> dict[str, str]:
+    """Read ~/.claude/sessions/<pid>.json files for user-set session names."""
+    names: dict[str, str] = {}
+    if not SESSIONS_DIR.is_dir():
+        return names
+    for f in SESSIONS_DIR.iterdir():
+        if f.suffix != ".json" or not f.is_file():
+            continue
+        try:
+            with open(f) as fp:
+                obj = json.load(fp)
+        except (OSError, json.JSONDecodeError):
+            continue
+        sid = obj.get("sessionId")
+        nm = obj.get("name")
+        if sid and isinstance(nm, str) and nm.strip():
+            names[sid] = nm.strip()
+    return names
+
+
 def find_sessions(top_n: int) -> list[SessionInfo]:
     if not CLAUDE_DIR.is_dir():
         print(f"Claude projects dir not found: {CLAUDE_DIR}", file=sys.stderr)
@@ -384,10 +406,12 @@ def find_sessions(top_n: int) -> list[SessionInfo]:
     jsonl_files.sort(key=lambda x: x[0], reverse=True)
     candidates = jsonl_files[: top_n * 3]
 
+    names = load_session_names()
     sessions = []
     for _, path in candidates:
         info = parse_session(path)
         if info:
+            info.name = names.get(info.session_id, "")
             try:
                 info.raw_content = path.read_text(errors="replace")
             except OSError:
@@ -496,6 +520,7 @@ def init_colors():
     curses.init_pair(6, curses.COLOR_MAGENTA, -1)   # assistant text
     curses.init_pair(7, curses.COLOR_BLUE, -1)      # agent text
     curses.init_pair(8, curses.COLOR_BLACK, curses.COLOR_WHITE)  # header bar
+    curses.init_pair(9, curses.COLOR_BLUE, -1)      # named session title
 
 
 C_IDX = 1
@@ -506,6 +531,7 @@ C_SELECTED = 5
 C_ASSISTANT = 6
 C_AGENT = 7
 C_HEADER = 8
+C_TITLE = 9
 
 
 def safe_addstr(win, y, x, text, attr=0):
@@ -664,13 +690,26 @@ def draw_list_view(stdscr, sessions: list[SessionInfo], cursor: int, scroll: int
 
             marker = " > " if is_sel else "   "
 
-            # Line 1: marker + cwd + timestamp
             attr_marker = curses.color_pair(C_IDX) | curses.A_BOLD
             attr_path = curses.color_pair(C_PATH) | curses.A_BOLD
             attr_dim = curses.A_DIM
-            safe_addstr(stdscr, y, 0, marker, attr_marker if is_sel else 0)
-            safe_addstr(stdscr, y, len(marker), cwd_short, attr_path)
-            safe_addstr(stdscr, y, len(marker) + len(cwd_short) + 2, ts, attr_dim)
+
+            # Optional header: session name (if user-set), in blue
+            if s.name:
+                attr_name = curses.color_pair(C_TITLE) | curses.A_BOLD
+                name_width = max(10, w - len(marker) - 2)
+                safe_addstr(stdscr, y, 0, marker, attr_marker if is_sel else 0)
+                safe_addstr(stdscr, y, len(marker), truncate(s.name, name_width), attr_name)
+                y += 1
+                cwd_marker = "   "  # already shown the row marker
+            else:
+                cwd_marker = marker
+
+            # Line 1: marker (or indent) + cwd + timestamp
+            safe_addstr(stdscr, y, 0, cwd_marker,
+                        attr_marker if (is_sel and not s.name) else 0)
+            safe_addstr(stdscr, y, len(cwd_marker), cwd_short, attr_path)
+            safe_addstr(stdscr, y, len(cwd_marker) + len(cwd_short) + 2, ts, attr_dim)
             y += 1
 
             # Line 2: stats
@@ -906,6 +945,8 @@ def curses_main(stdscr, sessions: list[SessionInfo],
                 lines = 4  # marker+path, stats, first msg, separator
                 if s.first_user_msg != s.last_user_msg:
                     lines += 1
+                if s.name:
+                    lines += 1  # optional name header
                 if has_snippets and s.session_id in match_snippets:
                     lines += len(match_snippets[s.session_id])
                 return lines
