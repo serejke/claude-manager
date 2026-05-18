@@ -422,6 +422,28 @@ def find_sessions(top_n: int) -> list[SessionInfo]:
     return sessions
 
 
+def partition_by_cwd(sessions: list[SessionInfo], cwd: str) -> list[SessionInfo]:
+    """Sessions in `cwd` first (preserving order), then the rest."""
+    here = [s for s in sessions if s.cwd == cwd]
+    other = [s for s in sessions if s.cwd != cwd]
+    return here + other
+
+
+def section_header(idx: int, sessions: list[SessionInfo], current_cwd: str,
+                   in_search: bool) -> str | None:
+    """Header text to draw above `sessions[idx]`, or None."""
+    if in_search or not sessions or not current_cwd:
+        return None
+    curr = sessions[idx]
+    prev = sessions[idx - 1] if idx > 0 else None
+    if idx == 0:
+        return "── In this directory ──" if curr.cwd == current_cwd \
+            else "── Other directories ──"
+    if prev and prev.cwd == current_cwd and curr.cwd != current_cwd:
+        return "── Other directories ──"
+    return None
+
+
 def search_sessions(sessions: list[SessionInfo], query: str) -> list[SessionInfo]:
     """Filter sessions whose raw_content contains query (case-insensitive)."""
     q = query.lower()
@@ -659,7 +681,8 @@ def draw_settings_view(stdscr, cfg: Config, cursor: int):
 
 def draw_list_view(stdscr, sessions: list[SessionInfo], cursor: int, scroll: int,
                    search_mode: bool = False, search_query: str = "",
-                   active_query: str = "", match_snippets: dict | None = None):
+                   active_query: str = "", match_snippets: dict | None = None,
+                   current_cwd: str = ""):
     h, w = stdscr.getmaxyx()
     stdscr.erase()
 
@@ -674,6 +697,7 @@ def draw_list_view(stdscr, sessions: list[SessionInfo], cursor: int, scroll: int
         safe_addstr(stdscr, 1, 2, sub, curses.color_pair(C_LABEL) | curses.A_BOLD)
 
     has_snippets = match_snippets is not None
+    in_search = bool(active_query)
     y = 2
 
     if not sessions and active_query:
@@ -683,6 +707,19 @@ def draw_list_view(stdscr, sessions: list[SessionInfo], cursor: int, scroll: int
         for i in range(scroll, len(sessions)):
             if y >= h - 1:
                 break
+
+            header = section_header(i, sessions, current_cwd, in_search)
+            if header:
+                if y > 2:
+                    y += 1  # blank spacer between groups
+                    if y >= h - 1:
+                        break
+                safe_addstr(stdscr, y, 2, header,
+                            curses.color_pair(C_LABEL) | curses.A_BOLD)
+                y += 1
+                if y >= h - 1:
+                    break
+
             s = sessions[i]
             is_sel = i == cursor
             cwd_short = s.cwd.replace(HOME, "~")
@@ -940,6 +977,7 @@ def curses_main(stdscr, sessions: list[SessionInfo],
         # ── Resume tab ───────────────────────────────────────────────────
         if mode == "list":
             # Compute actual height of each session item
+            in_search_now = bool(active_query)
             def item_height(idx):
                 s = display_sessions[idx]
                 lines = 4  # marker+path, stats, first msg, separator
@@ -949,6 +987,11 @@ def curses_main(stdscr, sessions: list[SessionInfo],
                     lines += 1  # optional name header
                 if has_snippets and s.session_id in match_snippets:
                     lines += len(match_snippets[s.session_id])
+                # section header above this item
+                if section_header(idx, display_sessions, current_cwd, in_search_now):
+                    lines += 1
+                    if idx > 0:
+                        lines += 1  # blank spacer between groups
                 return lines
 
             # Scroll up: ensure cursor item is visible
@@ -967,7 +1010,8 @@ def curses_main(stdscr, sessions: list[SessionInfo],
             draw_list_view(stdscr, display_sessions, cursor, list_scroll,
                            search_mode=search_mode, search_query=search_query,
                            active_query=active_query,
-                           match_snippets=match_snippets if has_snippets else None)
+                           match_snippets=match_snippets if has_snippets else None,
+                           current_cwd=current_cwd)
         else:
             detail_rendered_result = draw_detail_view(stdscr, display_sessions[cursor], detail_scroll)
 
@@ -1126,6 +1170,7 @@ def main():
     current_cwd = os.getcwd()
     cwd_entries = collect_recent_cwds(args.cwd_limit, current_cwd)
     sessions = find_sessions(args.count)
+    sessions = partition_by_cwd(sessions, current_cwd)
     cfg = load_config()
 
     if not cwd_entries and not sessions:
