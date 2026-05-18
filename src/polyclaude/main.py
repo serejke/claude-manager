@@ -29,7 +29,13 @@ import sys
 import textwrap
 import time
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
+
+try:
+    __version__ = _pkg_version("polyclaude")
+except PackageNotFoundError:
+    __version__ = "0.0.0+unknown"
 
 
 CLAUDE_DIR = Path.home() / ".claude" / "projects"
@@ -1146,7 +1152,7 @@ def main():
         description="The entry point to Claude Code — pick any directory, resume any session.",
     )
     parser.add_argument(
-        "--version", "-V", action="version", version="polyclaude 0.4.0",
+        "--version", "-V", action="version", version=f"polyclaude {__version__}",
     )
     parser.add_argument(
         "count", nargs="?", type=int, default=20,

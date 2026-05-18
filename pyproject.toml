@@ -1,6 +1,6 @@
 [project]
 name = "polyclaude"
-version = "0.4.0"
+dynamic = ["version"]
 description = "The entry point to Claude Code — pick any directory, resume any session."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,8 +16,14 @@ classifiers = [
 polyclaude = "polyclaude.main:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/polyclaude/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/polyclaude"]
