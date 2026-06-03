@@ -37,10 +37,12 @@ Single-file architecture — everything lives in `main.py`. No runtime dependenc
 
 Sessions live in `~/.claude/projects/<path-with-dashes>/<uuid>.jsonl`. Each line is a JSON object with:
 
-- `type`: "user" | "assistant" | "progress" | "file-history-snapshot"
+- `type`: "user" | "assistant" | "progress" | "file-history-snapshot" | "custom-title" | "mode"
 - `message.content`: string or array of `{type: "text", text: "..."}` / `{type: "tool_use", name: "..."}` / `{type: "tool_result", ...}` blocks
 - `sessionId`, `cwd`, `timestamp` (ISO 8601)
 - `isSidechain`, `agentId` for sub-agent messages
+
+**Session names (two formats, both supported).** A user-set session name is read in `parse_session` from `custom-title` lines (`{type: "custom-title", customTitle: "...", sessionId: "..."}`) embedded in the jsonl — last one wins, since names can be renamed mid-session. This is the current Claude Code format and takes precedence. The legacy format (`load_session_names`) reads a `name` field from `~/.claude/sessions/<pid>.json`; those files are keyed by live PID and ephemeral, so they only cover running/recent sessions and are used only as a fallback when a jsonl has no `custom-title`.
 
 ## Conventions
 

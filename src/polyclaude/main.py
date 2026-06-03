@@ -250,6 +250,7 @@ def collect_recent_cwds(limit: int, current_cwd: str | None) -> list[CwdEntry]:
 
 def parse_session(jsonl_path: Path, load_messages: bool = False) -> SessionInfo | None:
     first_user = last_user = session_id = cwd = ts_first = ts_last = None
+    custom_title = ""
     messages: list[ChatMessage] = []
     first_ts_epoch = 0.0
     last_ts_epoch = 0.0
@@ -270,6 +271,13 @@ def parse_session(jsonl_path: Path, load_messages: bool = False) -> SessionInfo 
                     session_id = obj["sessionId"]
                 if cwd is None and obj.get("cwd"):
                     cwd = obj["cwd"]
+
+                # User-set session name lives in a "custom-title" line (newer
+                # Claude Code). Last one wins — names can be changed mid-session.
+                if obj.get("type") == "custom-title":
+                    title = obj.get("customTitle")
+                    if isinstance(title, str) and title.strip():
+                        custom_title = title.strip()
 
                 # Track timestamps for duration
                 ts_raw = obj.get("timestamp", "")
@@ -352,6 +360,7 @@ def parse_session(jsonl_path: Path, load_messages: bool = False) -> SessionInfo 
         cwd=cwd or "?",
         file_path=jsonl_path,
         mtime=jsonl_path.stat().st_mtime,
+        name=custom_title,
         first_user_msg=first_user,
         last_user_msg=last_user or first_user,
         timestamp_first=ts_first or "",
@@ -377,7 +386,13 @@ def load_messages(session: SessionInfo):
 
 
 def load_session_names() -> dict[str, str]:
-    """Read ~/.claude/sessions/<pid>.json files for user-set session names."""
+    """User-set session names from the legacy ``~/.claude/sessions/<pid>.json``
+    store (older Claude Code). These files are keyed by live PID and ephemeral,
+    so they only cover running/recent sessions. Newer Claude Code persists the
+    name as a ``custom-title`` line inside each session jsonl instead — that is
+    read in ``parse_session`` and takes precedence. This is kept as a fallback
+    so names set by older versions still show for past chats.
+    """
     names: dict[str, str] = {}
     if not SESSIONS_DIR.is_dir():
         return names
@@ -412,12 +427,15 @@ def find_sessions(top_n: int) -> list[SessionInfo]:
     jsonl_files.sort(key=lambda x: x[0], reverse=True)
     candidates = jsonl_files[: top_n * 3]
 
-    names = load_session_names()
+    legacy_names = load_session_names()
     sessions = []
     for _, path in candidates:
         info = parse_session(path)
         if info:
-            info.name = names.get(info.session_id, "")
+            # New format: name parsed from the jsonl's custom-title line.
+            # Old format: fall back to the legacy per-pid sessions store.
+            if not info.name:
+                info.name = legacy_names.get(info.session_id, "")
             try:
                 info.raw_content = path.read_text(errors="replace")
             except OSError:
