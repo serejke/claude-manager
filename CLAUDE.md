@@ -30,8 +30,8 @@ Single-file architecture — everything lives in `main.py`. No runtime dependenc
 - **Cheap cwd peek**: New tab walks all session jsonl files but only reads the first ~5 lines per file to extract `cwd`. Sub-second across hundreds of sessions.
 - **Binary configurable**: `--binary` flag or `CLAUDE_BINARY` env var. Defaults to `claude`.
 - **exec-based launch**: uses `os.execvp` after `os.chdir` — replaces the process entirely, so the resumed Claude session inherits the correct cwd.
-- **Persistent config** at `~/.config/polyclaude/config.json` (XDG-aware via `XDG_CONFIG_HOME`). Schema: `{"skip_permissions": bool}`. Toggles auto-save.
-- **`--safe` CLI flag** forces `--dangerously-skip-permissions` OFF for one run, regardless of config.
+- **Persistent config** at `~/.config/polyclaude/config.json` (XDG-aware via `XDG_CONFIG_HOME`). Schema: `{"skip_permissions": bool}`. Defaults to `false` (permissions enforced); toggles auto-save. Enable in config/Settings to skip permission prompts.
+- **`--unsafe` CLI flag** forces `--dangerously-skip-permissions` ON for one run, regardless of config.
 
 ## Session data format
 

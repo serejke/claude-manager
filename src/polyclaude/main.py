@@ -3,7 +3,7 @@
 polyclaude — the entry point to Claude Code: pick any directory, resume any session.
 
 Usage:
-    polyclaude [--binary NAME] [--safe] [--cwd-limit N] [count]
+    polyclaude [--binary NAME] [--unsafe] [--cwd-limit N] [count]
 
 Tabs:
     New session  - launch claude in a recent cwd (current dir pinned)
@@ -50,7 +50,7 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 @dataclass
 class Config:
-    skip_permissions: bool = True
+    skip_permissions: bool = False
 
 
 def load_config() -> Config:
@@ -59,7 +59,7 @@ def load_config() -> Config:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return Config()
-    return Config(skip_permissions=bool(data.get("skip_permissions", True)))
+    return Config(skip_permissions=bool(data.get("skip_permissions", False)))
 
 
 def save_config(cfg: Config) -> None:
@@ -1182,8 +1182,8 @@ def main():
         help="claude binary to use (default: $CLAUDE_BINARY or 'claude')",
     )
     parser.add_argument(
-        "--safe", action="store_true",
-        help="force --dangerously-skip-permissions OFF for this run (overrides config)",
+        "--unsafe", action="store_true",
+        help="force --dangerously-skip-permissions ON for this run (overrides config)",
     )
     parser.add_argument(
         "--cwd-limit", type=int, default=10,
@@ -1209,7 +1209,7 @@ def main():
     if action is None:
         sys.exit(0)
 
-    skip_perms = cfg.skip_permissions and not args.safe
+    skip_perms = cfg.skip_permissions or args.unsafe
     kind, payload = action
 
     if kind == "new":
